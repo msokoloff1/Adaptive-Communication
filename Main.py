@@ -5,11 +5,12 @@ import Utilities as utils
 import numpy as np
 from random import randint
 import sys
+import time
 
 """Parse command line args"""
 parser = argparse.ArgumentParser()
-parser.add_argument('-num_iters', default=10000, type=int, help="Sets the number of training iterations")
-parser.add_argument('-message_length', default=120, type=int, help="Length of plaintext/ciphertext")
+parser.add_argument('-num_iters', default=20000, type=int, help="Sets the number of training iterations")
+parser.add_argument('-message_length', default=120, type=int, help="Length of plaintext/ciphertext (Must be a multiple of 5)")
 parser.add_argument('-batch_size', default=4096, type=int, help="Batch size used for training ops")
 parser.add_argument('-optimizer', default='Adam', type=str,
                     help="Optimizer to be used when applying gradients (adam,adadelta,adagrad,rmsprop)")
@@ -17,7 +18,7 @@ parser.add_argument('-learning_rate', default=0.0008, type=int, help="Learning r
 parser.add_argument('-attack', default='none', type=str,help="Select attack type [\'none\',\'regular\',\'geometric\']")
 
 args = parser.parse_args()
-
+assert (args.message_length % 5 == 0), "Message length must be a multiple of 5"
 """Select optimizer"""
 optimizer = tf.train.AdamOptimizer(args.learning_rate)
 if (args.optimizer.lower() == 'adadelta'):
@@ -61,8 +62,11 @@ def expMovGen(logging= True):
 		count += 1
 
 """Begin training loop"""
+
+
 def train(numIters):
     with tf.Session() as sess:
+        start = time.time()
         #KEY MUST BE A DIFFERENT PART OF THE PARITY TREE EACH TIME. THE INDEX WILL BE MADE PUBLIC!
         accuracyManager = expMovGen(logging=False)
         accuracyManager.send(None)
@@ -73,6 +77,7 @@ def train(numIters):
         sess.run(tf.initialize_all_variables())
         #Do we stop the random walk? Or keep moving?
         count = 0
+        #buildDict = lambda obji, name, d, m_len, b_size, iter: d[name] = obji.getKey(m_len, b_size, iter)
         for iter in range(args.num_iters):
             data = next(dataGen)
             L = 10
@@ -92,20 +97,20 @@ def train(numIters):
                     '\r' + "Key Gen Iteration : %d | A/B Accuracy : %f | C Accuracy : %f" % (count, ABTreeSync, EveTreeSync))
 
                 count+= 1
-
-            randomIndices = np.random.randint(0, int(N*K), args.batch_size)
-            #Test with random numpy arrays
-
-`
-            #THREAD key gen
-            #for _ in range(2): threading.Thread(target=getBitSequence, args=(numBits, batchSize,)).start()
+	    #Create a threaded generator in the util file that continually adds keys to a generator (append to current generator class) 
+            aKey = alice.tree.getKey(args.message_length, args.batch_size,iter)
+            bKey = bob.tree.getKey(args.message_length, args.batch_size,iter)
+            cKey = eve.tree.getKey(args.message_length, args.batch_size,iter)
+            ab = np.array_equal(aKey, bKey)
+            e = np.array_equal(aKey, cKey)
+            sys.stdout.write('\r' + "Iteration : %d | ABSame : %s | ACSame : %s"%(iter, str(ab), str(e)))
+            sys.stdout.flush()
             feedDict = {
-                 alice._inputKey: alice.tree.getKey(args.message_length,randomIndices)
-                , bob._inputKey:  bob.tree.getKey(args.message_length,randomIndices)
-                , eve._inputKey:  eve.tree.getKey(args.message_length, randomIndices)
+                 alice._inputKey: aKey
+                , bob._inputKey:  bKey
+                , eve._inputKey:  cKey
                 , alice._inputMessage: np.array(data['plainText'])
             }
-
             updateOps = next(turnGen)
             sess.run(updateOps, feed_dict=feedDict)
             if (iter % 100 == 0):
@@ -116,11 +121,13 @@ def train(numIters):
                 str(iter).zfill(6), aliceAndBobLossEvaluated, eveIncorrect, bobIncorrect))
 
                 if(iter == (args.num_iters-1)):
+                    print("Training Took %s"%str(time.time() - start))
                     if(bobIncorrect < 0.1 and eveIncorrect > 0.25):
                         print("Training Successful. Now testing robustness of model")
                         test()
                     else:
                         print("Training Failed!")
+
 
 
 def test():
@@ -130,14 +137,10 @@ def test():
             N = 32
             K = 100
 
-            randomIndices = np.random.randint(0, int(N * K), args.batch_size)
-
-
-
             feedDict = {
-                alice._inputKey: alice.tree.getKey(args.message_length, randomIndices)
-                , bob._inputKey: bob.tree.getKey(args.message_length, randomIndices)
-                , eve._inputKey: eve.tree.getKey(args.message_length, randomIndices)
+                alice._inputKey: alice.tree.getKey(args.message_length, args.batch_size,testIter)
+                , bob._inputKey: bob.tree.getKey(args.message_length, args.batch_size,testIter)
+                , eve._inputKey: eve.tree.getKey(args.message_length, args.batch_size,testIter)
                 , alice._inputMessage: np.array(data['plainText'])
             }
             sess.run(eve.getUpdateOp(eveLoss, optimizer), feed_dict=feedDict)

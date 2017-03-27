@@ -49,7 +49,7 @@ class Network():
 
     def _combineKeyAndText(self, key):
         """Concatenates text(ciphar or plain) with the key"""
-        concatenated = tf.concat(1,(key, utils.ensureRank2(self._inputMessage)))
+        concatenated = tf.concat([key, utils.ensureRank2(self._inputMessage)],1)
         return concatenated
 
     def getUpdateOp(self, loss, optimizer):

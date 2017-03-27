@@ -1,7 +1,8 @@
 import numpy as np
 import sys
 import re
-
+from multiprocessing import Process
+import time
 class Tree():
         def __init__(self,k,n,l):
                 self.generateTree(k,n,l)
@@ -29,30 +30,12 @@ class Tree():
                 self.weights = np.clip((self.weights+update), -self.l, self.l)
 
 
-        def getLine(self,messageLength, startIndex):
-            #Each weight is a decimal number that we map to an 8 bit binary value.
-            binary = []
-            count = 0
-            reshaped = self.weights.reshape(-1)
-            newIndex = 0
-            for index in range(messageLength):
-                newIndex = (index + startIndex) % reshaped.shape[0]
-                weight = reshaped[newIndex]
-                sign = str(int(np.clip(np.sign(weight), 0, 1)))
-                binaryVersion = sign + re.findall(r'\d+', bin(int(weight)))[-1].zfill(4)
-                for bit in binaryVersion:
-                    binary.append(int(bit))
 
-                if (len(binary) == messageLength * 2):
-                    return np.array(binary).reshape(-1)
-
-
-        def getKey(self, messageLength, indices):
-            results = []
-            for startIndex in indices:
-                results.append(self.getLine(messageLength,startIndex))
-
-            return np.array(results).reshape(-1, messageLength*2)
+        def getKey(self, messageLength, batchSize,iteration):
+            np.random.seed(iteration)
+            integerVersion = np.random.choice(self.weights.reshape(-1),(batchSize,(messageLength//5)*2))
+            formatted = [list("".join(["{0:05b}".format(int(val)).replace("-","1") for val in row])) for row in integerVersion]
+            return np.array(formatted).reshape(-1, messageLength*2)
 
 
 
