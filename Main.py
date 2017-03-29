@@ -9,7 +9,7 @@ import time
 
 """Parse command line args"""
 parser = argparse.ArgumentParser()
-parser.add_argument('-num_iters', default=20000, type=int, help="Sets the number of training iterations")
+parser.add_argument('-num_iters', default=22000, type=int, help="Sets the number of training iterations")
 parser.add_argument('-message_length', default=120, type=int, help="Length of plaintext/ciphertext (Must be a multiple of 5)")
 parser.add_argument('-batch_size', default=4096, type=int, help="Batch size used for training ops")
 parser.add_argument('-optimizer', default='Adam', type=str,
@@ -64,8 +64,8 @@ def expMovGen(logging= True):
 """Begin training loop"""
 
 
-def train(numIters):
-    with tf.Session() as sess:
+def train(numIters,sess):
+    with tf.variable_scope("Train") as scope:
         start = time.time()
         #KEY MUST BE A DIFFERENT PART OF THE PARITY TREE EACH TIME. THE INDEX WILL BE MADE PUBLIC!
         accuracyManager = expMovGen(logging=False)
@@ -74,7 +74,6 @@ def train(numIters):
         EveTreeSync = 0.0
         dataGen = utils.getData(args.message_length, args.batch_size)
         logMetrics = utils.getLoggingMetrics(bob, eve, alice)
-        sess.run(tf.initialize_all_variables())
         #Do we stop the random walk? Or keep moving?
         count = 0
         #buildDict = lambda obji, name, d, m_len, b_size, iter: d[name] = obji.getKey(m_len, b_size, iter)
@@ -122,7 +121,9 @@ def train(numIters):
 
                 if(iter == (args.num_iters-1)):
                     print("Training Took %s"%str(time.time() - start))
+                    return [bobIncorrect, eveIncorrect]
                     if(bobIncorrect < 0.1 and eveIncorrect > 0.25):
+                        print("----------------------------------------------------\n\n\n")
                         print("Training Successful. Now testing robustness of model")
                         test()
                     else:
@@ -130,8 +131,10 @@ def train(numIters):
 
 
 
-def test():
-    with tf.Session() as sess:
+def test(sess):
+    with tf.variable_scope("Test") as scope:
+        dataGen = utils.getData(args.message_length, args.batch_size)
+        logMetrics = utils.getLoggingMetrics(bob, eve, alice)
         for testIter in range(50000):
             data = next(dataGen)
             N = 32
@@ -144,13 +147,27 @@ def test():
                 , alice._inputMessage: np.array(data['plainText'])
             }
             sess.run(eve.getUpdateOp(eveLoss, optimizer), feed_dict=feedDict)
-            if (iter % 100 == 0):
+            if (testIter % 100 == 0):
                 aliceAndBobLossEvaluated, eveLossEvaluated, eveIncorrect, bobIncorrect = sess.run(
                     [tf.reduce_mean(aliceAndBobLoss), tf.reduce_mean(eveLoss)] + logMetrics, feed_dict=feedDict)
-                logger.writeToFile([iter, aliceAndBobLossEvaluated, eveLossEvaluated, eveIncorrect, bobIncorrect])
+                logger.writeToFile([testIter, aliceAndBobLossEvaluated, eveLossEvaluated, eveIncorrect, bobIncorrect])
                 print(
                     "Iteration %s | Alice/Bob Loss : %g  | Eve Incorrect : %g | Bob Incorrect : %g" % (
-                        str(iter).zfill(6), aliceAndBobLossEvaluated, eveIncorrect, bobIncorrect))
+                        str(testIter).zfill(6), aliceAndBobLossEvaluated, eveIncorrect, bobIncorrect))
 
 
-train(args.num_iters)
+with tf.Session() as sess:
+    saver = tf.train.Saver()    
+    path = "savedModels/successfulModel.ckpt"
+    try:
+        saver.restore(sess, path)
+        print("Successfully Restored Model!!"
+    except:
+	print("No model available for restoration")
+        sess.run(tf.initialize_all_variables())
+
+    bWrong, eWrong = train(args.num_iters, sess)
+    if(bWrong < 0.1 and eWrong > 0.2):
+        saver.save(sess, path)
+        test(sess)
+
