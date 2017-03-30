@@ -72,18 +72,12 @@ def train(numIters,sess):
         accuracyManager.send(None)
         ABTreeSync = 0.0
         EveTreeSync = 0.0
-        dataGen = utils.getData(args.message_length, args.batch_size)
         logMetrics = utils.getLoggingMetrics(bob, eve, alice)
-        #Do we stop the random walk? Or keep moving?
         count = 0
-        #buildDict = lambda obji, name, d, m_len, b_size, iter: d[name] = obji.getKey(m_len, b_size, iter)
-        for iter in range(args.num_iters):
-            data = next(dataGen)
-            L = 10
-            N = 32
-            K = 100
-
-            while(ABTreeSync< 0.99):
+        L = 10
+        K = 100
+        N = 32
+        while(ABTreeSync< 0.99):
                 inputs = np.random.randint(-L,L+1, [K,N])
                 hiddenA, outputA = alice.tree.getActivations(inputs)
                 hiddenB, outputB = bob.tree.getActivations(inputs)
@@ -96,18 +90,23 @@ def train(numIters,sess):
                     '\r' + "Key Gen Iteration : %d | A/B Accuracy : %f | C Accuracy : %f" % (count, ABTreeSync, EveTreeSync))
 
                 count+= 1
-	    #Create a threaded generator in the util file that continually adds keys to a generator (append to current generator class) 
-            aKey = alice.tree.getKey(args.message_length, args.batch_size,iter)
-            bKey = bob.tree.getKey(args.message_length, args.batch_size,iter)
-            cKey = eve.tree.getKey(args.message_length, args.batch_size,iter)
-            ab = np.array_equal(aKey, bKey)
-            e = np.array_equal(aKey, cKey)
-            sys.stdout.write('\r' + "Iteration : %d | ABSame : %s | ACSame : %s"%(iter, str(ab), str(e)))
+        print("A/B Accuracy : %f | C Accuracy : %f" % (ABTreeSync, EveTreeSync))
+
+        if(EveTreeSync > 0.5):
+            exit(0)
+
+
+        dataGen = utils.getData(args.message_length, args.batch_size)
+
+        for iter in range(args.num_iters):
+            data = next(dataGen)
+            sys.stdout.write('\r' + "Iteration : %d"%(iter))
             sys.stdout.flush()
+
             feedDict = {
-                 alice._inputKey: aKey
-                , bob._inputKey:  bKey
-                , eve._inputKey:  cKey
+                 alice._inputKey: alice.tree.getKey(args.message_length, args.batch_size, iter)
+                , bob._inputKey: bob.tree.getKey(args.message_length, args.batch_size,iter)
+                , eve._inputKey: eve.tree.getKey(args.message_length, args.batch_size, iter)
                 , alice._inputMessage: np.array(data['plainText'])
             }
             updateOps = next(turnGen)
@@ -119,15 +118,9 @@ def train(numIters,sess):
                 print("Iteration %s | Alice/Bob Loss : %g  | Eve Incorrect : %g | Bob Incorrect : %g" % (
                 str(iter).zfill(6), aliceAndBobLossEvaluated, eveIncorrect, bobIncorrect))
 
-                if(iter == (args.num_iters-1)):
-                    print("Training Took %s"%str(time.time() - start))
-                    return [bobIncorrect, eveIncorrect]
-                    if(bobIncorrect < 0.1 and eveIncorrect > 0.25):
-                        print("----------------------------------------------------\n\n\n")
-                        print("Training Successful. Now testing robustness of model")
-                        test()
-                    else:
-                        print("Training Failed!")
+            if(iter == (args.num_iters-1)):
+                print("Training Took %s"%str(time.time() - start))
+                return sess.run(logMetrics, feed_dict=feedDict)
 
 
 
@@ -139,7 +132,7 @@ def test(sess):
             data = next(dataGen)
             N = 32
             K = 100
-
+            L = 10
             feedDict = {
                 alice._inputKey: alice.tree.getKey(args.message_length, args.batch_size,testIter)
                 , bob._inputKey: bob.tree.getKey(args.message_length, args.batch_size,testIter)
@@ -161,13 +154,13 @@ with tf.Session() as sess:
     path = "savedModels/successfulModel.ckpt"
     try:
         saver.restore(sess, path)
-        print("Successfully Restored Model!!"
+        print("Successfully Restored Model!!")
     except:
-	print("No model available for restoration")
+        print("No model available for restoration")
         sess.run(tf.initialize_all_variables())
 
-    bWrong, eWrong = train(args.num_iters, sess)
-    if(bWrong < 0.1 and eWrong > 0.2):
-        saver.save(sess, path)
-        test(sess)
+    eWrong, bWrong = train(args.num_iters, sess)
+    #if(bWrong < 0.1 and eWrong > 0.2):
+    saver.save(sess, path)
+    test(sess)
 
