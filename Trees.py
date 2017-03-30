@@ -7,7 +7,9 @@ class Tree():
         def __init__(self,k,n,l):
                 self.generateTree(k,n,l)
                 #Min of l or 15 because we only have 4 bit unsigned representations (5 bits with the signed version)
-                self.l = min(l, 15)
+                self.NUM_BITS = 5
+                self.l = min(l, ((self.NUM_BITS-1)**2)-1 )
+
 
         def generateTree(self, k,n,l):
                 self.weights = np.random.randint(-l,l+1, [k, n])
@@ -33,7 +35,7 @@ class Tree():
 
         def getKey(self, messageLength, batchSize,iteration):
             np.random.seed(iteration)
-            integerVersion = np.random.choice(self.weights.reshape(-1),(batchSize,(messageLength//5)*2))
+            integerVersion = np.random.choice(self.weights.reshape(-1),(batchSize,(messageLength//self.NUM_BITS)*2))
             formatted = [list("".join(["{0:05b}".format(int(val)).replace("-","1") for val in row])) for row in integerVersion]
             return np.array(formatted).reshape(-1, messageLength*2)
 
