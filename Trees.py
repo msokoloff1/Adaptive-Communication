@@ -33,23 +33,11 @@ class Tree():
 
         def prepKeys(self):
             self.formattedKeys = np.array(list("".join(["{0:05b}".format(int(val)).replace("-","1") for val in self.weights.reshape(-1)])))
-            print(self.formattedKeys)
             
 
         def getKey(self, messageLength, batchSize,iteration):
-            #its probably faster to run this upfront. Since we probably redo this 
             np.random.seed(iteration)
-<<<<<<< HEAD
-            #integerVersion = np.random.choice(self.weights.reshape(-1),(batchSize,(messageLength//5)*2))
-            #formatted = [list("".join(["{0:05b}".format(int(val)).replace("-","1") for val in row])) for row in integerVersion]
-            #return np.array(formatted).reshape(-1, messageLength*2)
             return np.random.choice(self.formattedKeys, (batchSize, messageLength*2))
-=======
-            integerVersion = np.random.choice(self.weights.reshape(-1),(batchSize,(messageLength//self.NUM_BITS)*2))
-            formatted = [list("".join(["{0:05b}".format(int(val)).replace("-","1") for val in row])) for row in integerVersion]
-            return np.array(formatted).reshape(-1, messageLength*2)
-
->>>>>>> bf20cf3de7110151e9fe7c786c210e8e8b1a74b7
 
 
 
