@@ -77,6 +77,9 @@ def train(numIters,sess):
         L = 10
         K = 100
         N = 32
+        alice.tree.prepKeys()
+        bob.tree.prepKeys()
+        eve.tree.prepKeys()
         while(ABTreeSync< 0.99):
                 inputs = np.random.randint(-L,L+1, [K,N])
                 hiddenA, outputA = alice.tree.getActivations(inputs)
@@ -98,7 +101,7 @@ def train(numIters,sess):
 
         dataGen = utils.getData(args.message_length, args.batch_size)
 
-        for iter in range(args.num_iters):
+        for iter in range(numIters):
             data = next(dataGen)
             sys.stdout.write('\r' + "Iteration : %d"%(iter))
             sys.stdout.flush()
@@ -118,7 +121,7 @@ def train(numIters,sess):
                 print("Iteration %s | Alice/Bob Loss : %g  | Eve Incorrect : %g | Bob Incorrect : %g" % (
                 str(iter).zfill(6), aliceAndBobLossEvaluated, eveIncorrect, bobIncorrect))
 
-            if(iter == (args.num_iters-1)):
+            if(iter == (numIters-1)):
                 print("Training Took %s"%str(time.time() - start))
                 return sess.run(logMetrics, feed_dict=feedDict)
 
@@ -133,34 +136,35 @@ def test(sess):
             N = 32
             K = 100
             L = 10
+            sys.stdout.write('\r' + "Iteration : %d"%(testIter))
             feedDict = {
                 alice._inputKey: alice.tree.getKey(args.message_length, args.batch_size,testIter)
-                , bob._inputKey: bob.tree.getKey(args.message_length, args.batch_size,testIter)
+                #, bob._inputKey: bob.tree.getKey(args.message_length, args.batch_size,testIter)
                 , eve._inputKey: eve.tree.getKey(args.message_length, args.batch_size,testIter)
                 , alice._inputMessage: np.array(data['plainText'])
             }
             sess.run(eve.getUpdateOp(eveLoss, optimizer), feed_dict=feedDict)
             if (testIter % 100 == 0):
-                aliceAndBobLossEvaluated, eveLossEvaluated, eveIncorrect, bobIncorrect = sess.run(
-                    [tf.reduce_mean(aliceAndBobLoss), tf.reduce_mean(eveLoss)] + logMetrics, feed_dict=feedDict)
-                logger.writeToFile([testIter, aliceAndBobLossEvaluated, eveLossEvaluated, eveIncorrect, bobIncorrect])
+                eveIncorrect = sess.run(
+                    [tf.reduce_mean(eveLoss)], feed_dict=feedDict)
+                #logger.writeToFile([testIter, aliceAndBobLossEvaluated, eveLossEvaluated, eveIncorrect, bobIncorrect])
                 print(
-                    "Iteration %s | Alice/Bob Loss : %g  | Eve Incorrect : %g | Bob Incorrect : %g" % (
-                        str(testIter).zfill(6), aliceAndBobLossEvaluated, eveIncorrect, bobIncorrect))
+                    "Iteration %s | Eve Incorrect : %s " % (
+                        str(testIter).zfill(6), str(eveIncorrect)))
 
 
 with tf.Session() as sess:
     saver = tf.train.Saver()    
-    path = "savedModels/successfulModel.ckpt"
-    try:
-        saver.restore(sess, path)
-        print("Successfully Restored Model!!")
-    except:
-        print("No model available for restoration")
-        sess.run(tf.initialize_all_variables())
+    #path = "savedModels/successfulModel.ckpt"
+    #try:
+    #    saver.restore(sess, path)
+    #    print("Successfully Restored Model!!")
+    #except:
+    #    print("No model available for restoration")
+    sess.run(tf.initialize_all_variables())
 
     eWrong, bWrong = train(args.num_iters, sess)
     #if(bWrong < 0.1 and eWrong > 0.2):
-    saver.save(sess, path)
+    #saver.save(sess, path)
     test(sess)
 
